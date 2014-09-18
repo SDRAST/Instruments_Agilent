@@ -4,10 +4,15 @@ Package Observatory module instruments
 
 Monitor and control of commercial instruments
 """
-from Gpib import Gpib
+from Electronics.Interfaces.GPIB import Gpib
+from Electronics.Interfaces.GPIB.devices import pm
+
 import re
 from time import sleep, ctime, time
 import numpy as NP
+import logging
+
+module_logger = logging.getLogger(__name__)
 
 
 class SG(Gpib):
@@ -107,21 +112,26 @@ class PM(Gpib):
 
   Public Attributes
   =================
-  - ID - name of power meter as in /etc/gpib.conf
+  - ID -      name of power meter as in /etc/gpib.conf
   - pm_type - power meter model
-  - mode - data mode ( W | dBm | ? [rel] )
+  - mode -    data mode ( W | dBm | ? [rel] )
   """
-  def __init__(self,ID,pm_type):
+  def __init__(self, name, pm_type=None, timeout=10000):
     """
-    @type ID : str
-    @param ID : as it appears in /etc/gpib.conf
+    @type name : str
+    @param name : as it appears in /etc/gpib.conf
 
     @type pm_type : str
     @param pm_type : model number (436, 437, 438, E4418, etc.)
     """
-    Gpib.__init__(self,ID)
-    self.ID = ID
+    Gpib.__init__(self, name)
+    module_logger.debug("PM.__init__: opened session %d", self.instrument)
+    if pm_type == None:
+      (devtype,devID) = name.split()
+      pm_type = pm[devID]['type']
+    self.name = name
     self.pm_type = pm_type
+    self.tmo(500)
     self.mode = self.get_mode()
     self.init()
 
@@ -165,7 +175,7 @@ class PM(Gpib):
       try:
         readings.append( float(self.read().strip()) )
       except:
-        print "Invalid reading from PM", i
+        module_logger.error("PM.get_readings: Invalid reading #%d from PM", i)
         readings.append(0)
       if i < num-1:
         sleep(0.5)
@@ -189,21 +199,23 @@ class PM(Gpib):
 
     @return: str
     """
+    module_logger.debug("PM.get_mode: entered")
     if re.search('437', self.pm_type) or \
        re.search('438', self.pm_type) or \
        re.search('E4418', self.pm_type):
       try:
         self.write("SM")
       except:
-        print "PM",self.ID,"mode request failed"
+        module_logger.error("PM.get_mode: sending PM%d mode request failed", self.name)
         return None
       try:
         response = self.read()
-      except:
-        print "reading PM",self.ID,"failed"
+      except Exception, details:
+        module_logger.error("PM.get_mode: reading PM %s failed", self.name)
+        module_logger.error("PM.get_mode: "+str(details))
         return None
     else:
-      print "Unknown power meter type:",self.pm_type
+      module_logger.error("PM.get_mode: Unknown power meter type %s",self.pm_type)
       return None
     # This returns a string something like this: 000000151105170A0002000
     if len(response) >= 15:
