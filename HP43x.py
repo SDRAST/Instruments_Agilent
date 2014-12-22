@@ -140,7 +140,8 @@ class PM(Gpib):
       try:
         self.write("SM")
       except:
-        module_logger.error("PM.get_mode: sending PM%d mode request failed", self.name)
+        module_logger.error("PM.get_mode: sending PM%d mode request failed",
+                            self.name)
         return None
       try:
         response = self.read()
